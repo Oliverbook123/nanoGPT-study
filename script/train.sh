@@ -16,6 +16,7 @@
 #   ./script/train.sh stop      发 SIGINT 停训练（会话保留，可翻看输出）
 #   ./script/train.sh kill      关掉服务器上的 tmux 会话
 #   ./script/train.sh shell     直接进服务器的仓库目录开个 shell
+#   ./script/train.sh setup-key ★ 装 SSH 公钥（输一次密码，之后永久免密）
 #
 #   # 例子
 #   ./script/train.sh start                          # 默认 config/train_shakespeare_char.py
@@ -28,6 +29,24 @@
 #   3. 内置默认值
 #   注意：.env 那种 user@host:path 的写法不支持带端口的 host；
 #         要非默认端口就显式设 NANOGPT_REMOTE=user@host:端口 和 NANOGPT_REMOTE_DIR=/路径
+#
+# 免去手输密码（可选，二选一）：
+#
+#   A. 用 macOS 钥匙串（推荐，密码不落任何文件）——先你自己在终端执行一次：
+#        security add-generic-password -a <你的用户名> -s nanogpt-ssh -w   # 会提示你输入密码
+#      然后在 .env 里加两行：
+#        NANOGPT_KEYCHAIN_SERVICE=nanogpt-ssh
+#        NANOGPT_KEYCHAIN_ACCOUNT=<你的用户名>
+#      之后本脚本会给 ssh 装上 SSH_ASKPASS 钩子，自动从钥匙串取密码。
+#
+#   B. 装 SSH 密钥（更彻底，一次之后永远不需要密码）：
+#        ./script/train.sh setup-key      # 等价于 ssh-copy-id + 免密验证
+#
+#   也可用 NANOGPT_ASKPASS_CMD='你自己的取密码命令' 或 NANOGPT_ASKPASS_FILE=/path/0600文件。
+#
+#   注意：这只对**本脚本发起的 ssh** 生效。Mutagen 的同步会话不受影响——
+#   它会把 SSH_ASKPASS 强制指向自己（实测），所以 Mutagen 要免密只能装密钥，
+#   或用 MUTAGEN_SSH_PATH 指向一个包装过的 ssh。
 #
 # 可选环境变量：
 #   NANOGPT_SESSION    tmux 会话名          默认 nanogpt-train
@@ -84,6 +103,45 @@ shq() {
     s=${s//\'/\'\\\'\'}
     printf "'%s'" "$s"
 }
+
+# ---- 可选：让 ssh 自动取密码 -------------------------------------------------
+# 原理：OpenSSH 官方的 SSH_ASKPASS 钩子——没有终端时，ssh 会运行这个程序，
+# 并从它的 stdout 读密码；OpenSSH 8.4+ 用 SSH_ASKPASS_REQUIRE=force 可强制启用。
+# 密码不写进脚本/仓库：helper 只负责"去哪取"，来源由你决定（钥匙串/自定义命令/0600 文件）。
+setup_askpass() {
+    ASKPASS_DIR=""
+    local svc="${NANOGPT_KEYCHAIN_SERVICE:-}" acct="${NANOGPT_KEYCHAIN_ACCOUNT:-}"
+    local cmd="${NANOGPT_ASKPASS_CMD:-}" file="${NANOGPT_ASKPASS_FILE:-}"
+    if [ -z "$svc$cmd$file" ]; then return 0; fi
+
+    ASKPASS_DIR="$(mktemp -d)"
+    chmod 700 "$ASKPASS_DIR"
+    if [ -n "$file" ]; then
+        case "$(stat -f '%Lp' "$file" 2>/dev/null)" in
+        600 | 400) ;;
+        *) die "$file 权限必须是 0600（当前 $(stat -f '%Lp' "$file" 2>/dev/null)）：chmod 600 $file" ;;
+        esac
+        printf '#!/bin/sh\nexec cat %s\n' "$(shq "$file")" >"$ASKPASS_DIR/askpass"
+    elif [ -n "$cmd" ]; then
+        printf '#!/bin/sh\nexec sh -c %s\n' "$(shq "$cmd")" >"$ASKPASS_DIR/askpass"
+    else
+        # 没条目时直接给出明确提示，而不是让 ssh 把 security 的报错文本当密码用
+        security find-generic-password -s "$svc" -a "${acct:-$USER}" >/dev/null 2>&1 ||
+            die "钥匙串里没有条目 $svc/${acct:-$USER}。先执行一次：
+      security add-generic-password -a ${acct:-$USER} -s $svc -w   # 会提示你输入密码"
+        printf '#!/bin/sh\nexec security find-generic-password -w -a %s -s %s\n' \
+            "$(shq "${acct:-$USER}")" "$(shq "$svc")" >"$ASKPASS_DIR/askpass"
+    fi
+    chmod 700 "$ASKPASS_DIR/askpass"
+    export SSH_ASKPASS="$ASKPASS_DIR/askpass" SSH_ASKPASS_REQUIRE=force
+    export DISPLAY="${DISPLAY:-:0}"
+    trap 'rm -rf "$ASKPASS_DIR"' EXIT
+    say "已启用自动取密码（来源：${svc:+钥匙串 ${svc}}${cmd:+自定义命令}${file:+文件}）"
+}
+
+if [ "${NANOGPT_DRY_RUN:-0}" != "1" ]; then
+    setup_askpass
+fi
 
 # 把本地解析好的设置转发到远端（ssh 不会继承本地环境；远端那份 .env 也会被同步过去，
 # 但同步有延迟，所以本地解析出来的值优先由这里显式带过去）
@@ -160,6 +218,32 @@ cmd_start() {
     fi
 }
 
+cmd_setup_key() {
+    banner
+    say "把本机公钥装到服务器上（会让你输一次密码，之后永久免密）"
+    say "公钥：$(ssh-keygen -lf "$HOME/.ssh/id_ed25519.pub" 2>/dev/null | awk '{print $2, $3}')"
+    say ""
+    if ! command -v ssh-copy-id >/dev/null 2>&1; then
+        die "本机没有 ssh-copy-id"
+    fi
+    # ssh-copy-id 依赖远端能跑 sh；原生 Windows OpenSSH 会失败
+    ssh-copy-id -o ConnectTimeout=10 "$REMOTE" || die "ssh-copy-id 失败：远端可能没有 sh（原生 Windows OpenSSH）。
+     那种情况要手动把公钥追加到 C:\\Users\\<用户>\\.ssh\\authorized_keys（注意 ACL 只允许本人+SYSTEM）
+     先跑 ./script/train.sh doctor 看清远端到底是什么环境"
+
+    say ""
+    say "验证：只用公钥认证能否登入（BatchMode 保证不会偷偷退回问密码）…"
+    if ssh -o BatchMode=yes -o PreferredAuthentications=publickey "${SSH_OPTS[@]}" "$REMOTE" 'echo KEY-OK'; then
+        say ""
+        say "✅ 免密已生效。"
+        say "   - script/train.sh 的 doctor/start/status 都不再问密码"
+        say "   - Mutagen 不用重建会话：下次掉线/重启后它会自己用密钥重连"
+        say "   - 想立刻验证自动重连：pkill -f 'mutagen-agent synchronizer'，几秒后看 ./sync.sh list 是否回到 Connected"
+    else
+        die "公钥似乎装上了但仍登不上：检查远端 authorized_keys 的内容与权限（Windows 上过宽的 ACL 会让 sshd 直接忽略该文件）"
+    fi
+}
+
 cmd_shell() {
     if [ "${NANOGPT_DRY_RUN:-0}" = "1" ]; then
         printf '[dry-run] ssh -t %s %s %s\n' "${SSH_OPTS[*]}" "$REMOTE" "$(printf '%q' "cd $REMOTE_DIR && exec bash -l")"
@@ -169,7 +253,8 @@ cmd_shell() {
 }
 
 usage() {
-    sed -n '2,42p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    # 打印文件头部的注释块（到第一个非注释行结束），比写死行号可靠
+    awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
 }
 
 case "${1:-}" in
@@ -198,6 +283,7 @@ kill)
     rrun kill
     ;;
 shell) cmd_shell ;;
+setup-key) cmd_setup_key ;;
 "" | -h | --help | help) usage ;;
-*) die "未知命令 '$1'（doctor / setup / prepare / start / status / log / attach / stop / kill / shell）" ;;
+*) die "未知命令 '$1'（doctor / setup / setup-key / prepare / start / status / log / attach / stop / kill / shell）" ;;
 esac

@@ -1,8 +1,9 @@
 # nanoGPT 依赖清单（由 script/train.sh 用 uv pip install -r 安装）
 #
 # 实测 train.py 只 import：torch / numpy / os / time / math / pickle / contextlib
-# 数据准备脚本 data/*/prepare.py 另外需要 requests（下载数据集）、tiktoken（gpt2 编码）
-# 字符级数据集（shakespeare_char）不需要 tiktoken，但装上无妨。
+# 数据准备脚本 data/*/prepare.py 另外需要 requests（下载）、tiktoken（gpt2 编码）、
+#   beautifulsoup4（hongloumeng 抓网页）
+# 字符级数据集（shakespeare_char / hongloumeng）不需要 tiktoken，但装上无妨。
 #
 # wandb 故意不装：配置里 wandb_log = False，要用再加。
 
@@ -10,3 +11,4 @@ torch>=2.3
 numpy
 requests
 tiktoken
+beautifulsoup4

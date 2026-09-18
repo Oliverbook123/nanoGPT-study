@@ -19,6 +19,12 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 SELF="$HERE/$(basename "${BASH_SOURCE[0]}")"
+
+# 补 PATH（两个坑都是实测踩出来的）：
+#   1. uv 装在 ~/.local/bin，而非交互式 ssh 不会读 .bashrc，找不到 uv
+#   2. WSL 里 nvidia-smi 只在 /usr/lib/wsl/lib，不在默认 PATH ——
+#      不加这一条，下面的设备探测会把「有 RTX 3070 Ti」误判成 CPU 训练
+export PATH="$HOME/.local/bin:/usr/lib/wsl/lib:$PATH"
 VENV="$REPO/.venv"
 PY="$VENV/bin/python"
 REQS="$HERE/requirements.txt"
@@ -301,9 +307,16 @@ cmd_prepare() {
     ls -lh "$REPO/data/$dataset"/*.bin "$REPO/data/$dataset"/*.pkl 2>/dev/null | sed 's/^/  /' || say "  （没看到产物，检查上面的报错）"
 }
 
+cmd_setup() {
+    ensure_env
+    say ""
+    say "环境自检：$PY"
+    "$PY" -c 'import torch,numpy;print("  torch   :",torch.__version__);print("  numpy   :",numpy.__version__);print("  CUDA    :",torch.cuda.is_available(),"->",(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "无"));print("  MPS     :",torch.backends.mps.is_available())'
+}
+
 case "${1:-}" in
 doctor) cmd_doctor ;;
-setup) ensure_env ;;
+setup) cmd_setup ;;
 prepare) shift; cmd_prepare "$@" ;;
 start) shift; cmd_start "$@" ;;
 status) cmd_status ;;

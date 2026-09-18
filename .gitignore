@@ -18,3 +18,6 @@ mutagen.yml
 # 训练脚本产物
 logs/
 
+# 红楼梦原始章节（约 1.5 MB，用 data/hongloumeng/prepare.py 重新下载即可）
+data/hongloumeng/raw/
+
