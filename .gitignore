@@ -10,3 +10,11 @@ __pycache__/
 input.txt
 env/
 venv/
+
+# Mutagen：mutagen.yml 由 sync.sh 生成，.env 存本机服务器地址
+mutagen.yml
+.env
+
+# 训练脚本产物
+logs/
+

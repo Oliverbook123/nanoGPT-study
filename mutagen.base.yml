@@ -1,0 +1,32 @@
+# Mutagen 共享配置：同步模式 + 忽略规则。被两条路复用：
+#   - ./sync.sh start   → 项目流程（把下面的配置 + 会话块拼成 mutagen.yml）
+#   - ./sync.sh create  → 直接建会话（-c mutagen.base.yml），这条会调用 ssh，
+#                         所以密码提示能回到你的终端
+#
+# 这个文件本身是合法的 mutagen 配置格式（只有 sync.defaults，没有会话定义），
+# 所以能直接当 -c/--configuration-file 用。
+
+sync:
+  defaults:
+    # two-way-safe：双向同步，两边都改了同一个文件时不覆盖，而是报冲突让你处理
+    mode: "two-way-safe"
+
+    ignore:
+      vcs: true # 忽略 .git
+      paths:
+        - ".DS_Store"
+        - "**/.DS_Store"
+        - "**/*.pyc"
+        - "**/__pycache__/"
+        - "**/*.bin" # 分词后的 token 数据集，动辄几 GB —— 在服务器上自己跑 prepare.py
+        - "**/*.pkl" # 同上（gpt2/vocab 元数据）
+        - "**/*.pt" # 训练 checkpoint，大文件，不来回同步
+        - "**/*.safetensors"
+        - "**/out/" # train.py 默认的 checkpoint 输出目录
+        - "**/venv/"
+        - "**/env/"
+        - "**/.venv/"
+        - "**/.ipynb_checkpoints/"
+        - "**/.obsidian/" # Obsidian 工作区状态，两边都开会打架
+        - "**/.vscode/"
+        - "**/.idea/"
