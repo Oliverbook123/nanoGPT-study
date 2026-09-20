@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "02_架构.md",
+                "file": "05_源码解读_model.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "02_架构"
+              "title": "05_源码解读_model"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "02_架构.md",
+                "file": "05_源码解读_model.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "02_架构 的反向链接列表"
+              "title": "05_源码解读_model 的反向链接列表"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "02_架构.md",
+                "file": "05_源码解读_model.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "02_架构 的出链列表"
+              "title": "05_源码解读_model 的出链列表"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "02_架构.md",
+                "file": "05_源码解读_model.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "02_架构 的大纲"
+              "title": "05_源码解读_model 的大纲"
             }
           }
         ]
@@ -185,9 +185,16 @@
   },
   "active": "74d12588ef44de11",
   "lastOpenFiles": [
+    "08_源码解读_sample与bench.md",
+    "05_源码解读_model.md",
+    "06_源码解读_train.md",
+    "09_源码解读_数据准备.md",
+    "README.md",
+    "02_架构.md",
+    "10_源码解读_配置与脚本.md",
+    "07_源码解读_configurator.md",
     "03_训练.md",
     "04_推理.md",
-    "02_架构.md",
     "gpt_architecture_mermaid.html",
     "gpt_architecture.html",
     "01_数据.md"
